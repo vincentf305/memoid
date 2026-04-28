@@ -16,6 +16,10 @@ wheels/
 # OS/editor noise
 .DS_Store
 
+# Memoid state and development workspace
+.memoid/
+.feature-triage/
+
 # Memoid Workspace Isolation
 # Ignore all dynamically generated knowledge, but keep the template files
 /memory/wiki/*
