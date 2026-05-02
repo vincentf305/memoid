@@ -86,3 +86,11 @@ Each specialized agent maintains a `DIARY.md`. This is for **meta-learning**, no
 10. **Bounded Output (Engine)**: The MCP server and any future retrieval engine must return bounded excerpts, not full file dumps. Retrieval results must include truncation indicators when content is omitted. Wake-up context must be compact — strip verbose file-path headers and redundant markup.
 11. **Scoped Lint on Writes**: Any MCP tool or engine function that modifies memory files (`memory/wiki/`, `memory/evidence/`) must run scoped lint on the affected artifacts and include the result in its response. A write without lint feedback is incomplete.
 12. **Optimization Gate**: When adding a new protocol or modifying `scripts/mcp_server.py`, verify compliance with rules 8–11. If a change would reintroduce full file dumps, loose protocol language, or duplicated conventions, reject it or flag it for revision.
+
+
+---
+
+This repository adopts spectoid standards.
+
+- spectoid version: 0d02034
+- local manifest: .spectoid/implementation-manifest.yaml
