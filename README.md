@@ -174,6 +174,9 @@ memoid pi
 memoid copilot
 ```
 
+> [!WARNING]
+> Start each new agent session with a `wake up` prompt so the agent runs the Memoid startup flow before doing any other work. If you skip this, the agent may answer without loading `AGENTS.md`, `memory/wiki/IDENTITY.md`, and `memory/wiki/ESSENTIAL_STORY.md`.
+
 If the `memoid` command is not found, make sure the install location was added to your `PATH`, then open a new shell and try again.
 
 ---
