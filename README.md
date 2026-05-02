@@ -5,7 +5,7 @@
 
 Memoid is a markdown-first memory system for AI agents that merges [Karpathy's LLM Wiki approach](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) and [MemPalace](https://github.com/MemPalace/mempalace).
 
-It is designed to be your **"Global Second Brain"** — accessible by any AI agent (Claude, Gemini, Codex, Cursor, OpenCode) regardless of which project you are currently working on.
+It is designed to be your **"Global Second Brain"** — accessible by any AI agent (Claude, Gemini, Codex, Cursor, GitHub Copilot, OpenCode) regardless of which project you are currently working on.
 
 Works in two modes:
 - **Standalone** — a dedicated repo that acts as a persistent second brain across projects
@@ -59,7 +59,7 @@ Memoid is 100% transparent. No databases, just interlinked Markdown files.
 ```
 memoid/
 ├── AGENTS.md               # Master orchestrator instructions
-├── CLAUDE.md / GEMINI.md   # Agent-specific guidance
+├── CLAUDE.md / GEMINI.md / CURSOR.md / copilot-instructions.md  # Agent-specific guidance
 ├── SPEC.md                 # Architecture design rationale
 ├── memory/
 │   ├── raw/                # Immutable source material (articles, transcripts, assets, inbox)
@@ -140,7 +140,7 @@ cd ~/memoid
 cp -r ~/memoid/memory ~/memoid/protocols ~/memoid/scripts your-project/
 ```
 
-Then add the following block to your project's agent config (`CLAUDE.md`, `GEMINI.md`, etc.):
+Then add the following block to your project's agent config (`CLAUDE.md`, `GEMINI.md`, `copilot-instructions.md`, etc.):
 
 ```markdown
 ## Memory System
@@ -170,6 +170,8 @@ After installation, the main local entrypoint is the `memoid` CLI. Running `memo
 memoid claude
 memoid gemini
 memoid codex
+memoid pi
+memoid copilot
 ```
 
 If the `memoid` command is not found, make sure the install location was added to your `PATH`, then open a new shell and try again.
