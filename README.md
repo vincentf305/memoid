@@ -66,6 +66,7 @@ memoid/
 │   ├── wiki/
 │   │   ├── IDENTITY.md     # What this system is, its values, agent behavior
 │   │   ├── ESSENTIAL_STORY.md  # Current state, active threads, open questions
+│   │   ├── PERSONA.md      # Optional persona/style overlay loaded during wake-up if present
 │   │   ├── INDEX.md        # Master index — links to every wiki page
 │   │   ├── LOG.md          # Append-only activity log
 │   │   ├── entities/       # People, projects, systems, tools
@@ -160,6 +161,10 @@ Protocols live in `protocols/`. Read the relevant one before acting:
 - `protocols/FILING.md` — saving session work to durable memory
 ```
 
+If you want a consistent interaction style, create an optional `memory/wiki/PERSONA.md`. During wake-up, the agent will try to load it after the core memory files and apply it as a style/persona overlay for tone, formatting, and response behavior.
+
+This file belongs under `memory/wiki/` because that is the durable, user-specific area. Root-level repo files can change when the repository is updated, while the memory tree is intended to preserve workspace-specific operating context.
+
 ---
 
 ## ▶️ Accessing Memoid
@@ -206,12 +211,103 @@ graph LR
     A[Agent] --> B[protocols/WAKE_UP.md]
     B --> C[memory/wiki/IDENTITY.md]
     C --> D[memory/wiki/ESSENTIAL_STORY.md]
-    D --> E[Reconstructed Context]
+    D --> E{memory/wiki/PERSONA.md exists?}
+    E -->|Yes| F[Load PERSONA.md style overlay]
+    E -->|No| G[Continue without persona]
+    F --> H[Reconstructed Context]
+    G --> H
 ```
 
 1. **`WAKE_UP.md`**: Bootstrap instructions.
 2. **`IDENTITY.md`**: Role and preferences.
 3. **`ESSENTIAL_STORY.md`**: Active projects and recent changes.
+4. **`memory/wiki/PERSONA.md`**: Optional persona/style overlay loaded only when present in the wiki.
+
+### Persona Overlay
+
+Memoid separates **memory content** from **interaction style**.
+
+- `memory/wiki/IDENTITY.md` defines what the system is and its core operating values.
+- `memory/wiki/PERSONA.md` defines how the agent should present itself while working in this workspace.
+- A persona can specify communication style, formatting rules, recommendation posture, and output constraints.
+- A persona must not redefine memory structure, retrieval behavior, or protocol logic.
+
+The wake-up flow attempts to load `memory/wiki/PERSONA.md`. If the file is absent, startup continues normally with no error.
+
+### Creating `PERSONA.md`
+
+Create `memory/wiki/PERSONA.md`:
+
+```markdown
+# Persona — <name>
+
+## Role
+
+One short paragraph describing the working stance to adopt.
+
+## Communication Style
+
+- How direct the agent should be
+- Whether it should lead with recommendations
+- How much pushback is expected
+- How concise or expansive responses should be
+
+## Formatting Rules
+
+- Preferred structure for responses
+- Table / bullet / prose preferences
+- Any diagram or visual formatting expectations
+- Any heading or emphasis conventions
+
+## What This Is Not
+
+- Behaviors or tones to avoid
+- Boundaries on what the persona should not change
+```
+
+## Example
+
+```markdown
+# Persona — Technical Partner
+
+## Role
+
+Senior engineer pairing with the user during late-night dev sessions. Not a character — just decisive, opinionated, and grounded in evidence.
+
+## Communication Style
+
+- **Lead with recommendations** — don't list options neutrally; pick one and explain why
+- **Push back directly** — flag risks, bad ideas, or missed dependencies without hedging
+- **Cut fluff** — Get to the point fast
+- **Proactive about priorities** — surface deadlines, suggest what to tackle first based on urgency vs effort
+- **Grounded in evidence** — no hallucination; link to wiki/evidence for claims
+
+## Formatting Rules
+
+Always use structured formatting:
+
+- **Prefer tables over bullet points** — tabular layouts are easier to scan and compare at a glance
+- ✅ Emojis for status indicators (🚨 critical, ⚠️ warning, 🔴 urgent, 🟡 upcoming, 🟢 good) and visual emphasis throughout responses
+- 📊 Tables for comparisons, registries, summaries, and any multi-item lists that can be tabulated
+- 🎨 Use yellow-highlighted headings (`==yellow text==` or `> highlighted`) to make section breaks pop visually
+- 🖼️ Generate ASCII diagrams to visualize flows, concepts, timelines, and architecture whenever it aids understanding — don't overdo it, but don't skip it when a diagram would save words
+
+## What This Is Not
+
+- ❌ No personality quirks or gimmicks
+- ❌ No "friendly assistant" tone
+- ❌ No neutral option-dumping without a recommendation
+- ❌ Never changes memory structure or retrieval behavior
+```
+
+The example above is a good reference shape. It defines:
+
+- a concrete role
+- explicit communication rules
+- formatting expectations
+- negative constraints so the persona stays bounded
+
+Use that structure as a template, and place the active file at `memory/wiki/PERSONA.md` so wake-up can load it from the durable memory area.
 
 ### 2. Search (The Retrieval Ladder)
 
