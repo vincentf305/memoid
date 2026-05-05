@@ -135,6 +135,13 @@ cd ~/memoid
 ./scripts/memoid init
 ```
 
+> [!NOTE]
+> **It is easier than it looks**: run the install script, launch your agent with `memoid <agent>`, say `wake up`, and start talking to it. It is fully customizable: edit the Markdown files directly or ask the agent to update them for you.
+
+> [!TIP]
+> If you want to customize the engine itself, fork the repository. Use the memory and protocol Markdown files for workspace-specific behavior; use a fork for engine-level changes you want to own.
+
+
 **Embedded (inside an existing project):**
 
 ```bash
@@ -572,20 +579,6 @@ Add to `codex.toml`:
 command = "memoid"
 args = ["mcp"]
 ```
-
----
-
-## 🔧 Troubleshooting
-
-### Agent Command Not Found
-If you get `Error: Agent command 'gemini' not found in PATH`, install the agent CLI globally:
-
-```bash
-sudo npm install -g @google/gemini-cli
-sudo npm install -g @openai/codex
-```
-
-Verify with `command -v <agent_name>` in your terminal.
 
 ---
 
