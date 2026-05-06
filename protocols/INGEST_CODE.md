@@ -27,6 +27,7 @@ At minimum, extract:
 - **Tech Stack**: Key technologies and dependencies relevant to understanding.
 - **Patterns**: Notable conventions, patterns, or risks.
 - **Code TODOs**: Structured TODO-style comments (`TODO`, `FIXME`, `HACK`, `XXX`) with exact code locations.
+- **Source Control**: Whether the ingested code is in source control; if it is an external git repository, detect repo root and offer remote extraction before persisting remotes.
 
 ## Process
 
@@ -36,9 +37,10 @@ At minimum, extract:
 4. **Identify Boundaries**: Find apps, services, packages, modules, APIs, and databases.
 5. **Trace Flows**: Follow the highest-value flows end-to-end.
 6. **Extract TODOs**: Scan the codebase for TODO-style comments and capture file path, line number, raw text, and nearby symbol or context when available.
-7. **Create Evidence**: Create one source note under `memory/evidence/source-notes/`, including the extracted TODO set or a statement that none were found.
-8. **Update Wiki**: Create or update relevant canonical wiki pages under `memory/wiki/`. If the ingest is for a project entity, attach promoted high-signal TODOs to that entity page and keep the full set in evidence.
-9. **Update Log**: Update `memory/wiki/INDEX.md` and append to `memory/wiki/LOG.md`.
+7. **Check Source Control**: If the codebase is outside the Memoid repository, determine whether it is a git repository. Detect repo root automatically. If remotes exist, ask the user before extracting and persisting them.
+8. **Create Evidence**: Create one source note under `memory/evidence/source-notes/`, including the extracted TODO set or a statement that none were found, plus source-control status.
+9. **Update Wiki**: Create or update relevant canonical wiki pages under `memory/wiki/`. If the ingest is for a project entity, attach promoted high-signal TODOs to that entity page and attach source-control details there. Only add git remotes after explicit user approval.
+10. **Update Log**: Update `memory/wiki/INDEX.md` and append to `memory/wiki/LOG.md`.
 
 ## Evidence Record (Source Note)
 
@@ -48,6 +50,8 @@ Include:
 - Summary of architecture and important directories.
 - Key flows inspected and any caveats.
 - Extracted TODO-style comments with precise locations, or an explicit `none found`.
+- Source-control status, including repo root when detected.
+- Remote URLs only after explicit user approval.
 - List of affected wiki pages.
 
 ## Heuristics
@@ -56,6 +60,7 @@ Include:
 - **Responsibility-based naming**: Summarize modules by responsibility, not just filename.
 - **No Large Excerpts**: Do not copy large source code blocks into the wiki.
 - **Evidence First**: Store the full TODO extraction in evidence; only promote high-signal TODOs into the project entity page.
+- **Consent Gate**: Detect external git remotes automatically, but do not persist them until the user approves.
 - **Trace Uncertainty**: Record explicitly when a flow was inferred rather than confirmed.
 
 ## Rules

@@ -497,6 +497,10 @@ Memoid has two distinct modes:
 
 > **AI Action:** Calls `memoid_ingest` with a `codebase_path`, extracts `TODO`/`FIXME`/`HACK`/`XXX` comments into the source note, and promotes high-signal items onto the project entity page.
 
+**Prompt:** "Ingest this external repo and include the git remotes if I approve."
+
+> **AI Action:** Calls `memoid_ingest`, detects whether the external codebase is a git repo, asks before persisting remotes, then stores approved remote URLs on the entity page and in the source note.
+
 **Prompt:** "Run a Memoid audit on the pages we touched."
 
 > **AI Action:** Calls `memoid_audit` to create an explicit audit note under `memory/evidence/audits/`.
@@ -507,7 +511,7 @@ Memoid has two distinct modes:
 |---|---|
 | **`memoid_wake_up`** | Bounded startup context for outside-repo use |
 | **`memoid_recall`** | Retrieval-ladder search with bounded excerpts and trust signals |
-| **`memoid_ingest`** | Raw → evidence → wiki → index → log pipeline with scoped lint; can also scan a `codebase_path` for TODO-style comments and attach them to a project entity |
+| **`memoid_ingest`** | Raw → evidence → wiki → index → log pipeline with scoped lint; can also scan a `codebase_path` for TODO-style comments, detect external git repos, and persist approved remote metadata on a project entity |
 | **`memoid_edit_wiki`** | Structured canonical-page updates with source/index preservation |
 | **`memoid_log`** | Session filing into `memory/evidence/sessions/` plus `LOG.md` |
 | **`memoid_audit`** | Explicit outside-repo maintenance that writes to `memory/evidence/audits/` |

@@ -2,6 +2,7 @@
 import os
 import datetime
 import re
+import subprocess
 from collections import Counter
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Set
@@ -38,7 +39,16 @@ IGNORED_CODE_DIRS = {
 }
 LOW_SIGNAL_TODO_SEGMENTS = {"test", "tests", "spec", "specs", "__tests__", "fixtures", "docs", "examples"}
 MAX_TODO_FILE_BYTES = 1_000_000
-INTERNAL_METADATA_KEYS = {"extract_todos", "extracted_todos", "generated_sections", "todo_scan_completed"}
+INTERNAL_METADATA_KEYS = {
+    "extract_todos",
+    "extracted_todos",
+    "generated_sections",
+    "todo_scan_completed",
+    "extract_remotes",
+    "git_repo_info",
+    "git_remotes",
+    "git_remote_extraction_pending",
+}
 
 
 def _tokenize(text: str) -> List[str]:
@@ -378,6 +388,71 @@ def _promote_todo_items(items: List[Dict[str, Any]], limit: int) -> List[Dict[st
         fallback = [item for item in items if item not in promoted]
         promoted.extend(fallback[: limit - len(promoted)])
     return promoted[:limit]
+
+
+def _path_is_within(base: Path, candidate: Path) -> bool:
+    try:
+        candidate.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
+def _detect_git_repo(codebase_path: Path) -> Optional[Dict[str, Any]]:
+    try:
+        top_level = subprocess.run(
+            ["git", "-C", codebase_path.as_posix(), "rev-parse", "--show-toplevel"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+    repo_root = Path(top_level).resolve()
+    try:
+        branch = subprocess.run(
+            ["git", "-C", repo_root.as_posix(), "rev-parse", "--abbrev-ref", "HEAD"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+    except subprocess.CalledProcessError:
+        branch = "unknown"
+
+    remotes: List[Dict[str, str]] = []
+    try:
+        remote_names_output = subprocess.run(
+            ["git", "-C", repo_root.as_posix(), "remote"],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        remote_names = [name.strip() for name in remote_names_output.splitlines() if name.strip()]
+        for remote_name in remote_names:
+            try:
+                remote_url = subprocess.run(
+                    ["git", "-C", repo_root.as_posix(), "remote", "get-url", remote_name],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+            except subprocess.CalledProcessError:
+                continue
+            remotes.append({"name": remote_name, "url": remote_url})
+    except subprocess.CalledProcessError:
+        pass
+
+    return {
+        "repo_root": repo_root.as_posix(),
+        "branch": branch,
+        "remote_count": len(remotes),
+        "remotes": remotes,
+    }
+
+
+def _render_git_remote_lines(remotes: List[Dict[str, str]]) -> List[str]:
+    return [f"- `{remote['name']}`: `{remote['url']}`" for remote in remotes]
 
 
 def _apply_generated_sections(
@@ -917,6 +992,29 @@ def _build_source_note(
             *note_lines,
             "",
         ]
+    git_repo_info = metadata.get("git_repo_info") if metadata else None
+    if git_repo_info:
+        git_section = [
+            "",
+            "## Source Control",
+            f"- Git repository detected: yes",
+            f"- Repo root: `{git_repo_info['repo_root']}`",
+            f"- Active branch: `{git_repo_info['branch']}`",
+        ]
+        if metadata.get("git_remotes"):
+            git_section.extend(
+                [
+                    f"- Remote count: {len(metadata['git_remotes'])}",
+                    "",
+                    "### Remotes",
+                    *_render_git_remote_lines(metadata["git_remotes"]),
+                ]
+            )
+        elif metadata.get("git_remote_extraction_pending"):
+            git_section.append("- Remotes: pending user approval before extraction")
+        else:
+            git_section.append("- Remotes: not extracted")
+        lines[lines.index("## Sources"):lines.index("## Sources")] = git_section + [""]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -998,6 +1096,7 @@ def memoid_ingest(
 
     codebase_path_value = str(metadata.get("codebase_path", "")).strip()
     extracted_todos: List[Dict[str, Any]] = []
+    codebase_path: Optional[Path] = None
     if codebase_path_value and str(metadata.get("extract_todos", "true")).lower() != "false":
         codebase_path = Path(codebase_path_value).expanduser()
         if codebase_path.exists() and codebase_path.is_dir():
@@ -1009,6 +1108,28 @@ def memoid_ingest(
         else:
             metadata["codebase_path"] = codebase_path.as_posix()
             metadata["todo_extraction_warning"] = "codebase_path was not a readable directory"
+    elif codebase_path_value:
+        codebase_path = Path(codebase_path_value).expanduser()
+        metadata["codebase_path"] = codebase_path.as_posix()
+
+    git_repo_info: Optional[Dict[str, Any]] = None
+    remote_prompt = ""
+    if codebase_path and codebase_path.exists() and codebase_path.is_dir():
+        resolved_codebase_path = codebase_path.resolve()
+        if not _path_is_within(ROOT, resolved_codebase_path):
+            git_repo_info = _detect_git_repo(resolved_codebase_path)
+            if git_repo_info:
+                metadata["git_repo_info"] = git_repo_info
+                extract_remotes_mode = str(metadata.get("extract_remotes", "ask")).lower()
+                if extract_remotes_mode in {"true", "yes"}:
+                    metadata["git_remotes"] = git_repo_info["remotes"]
+                elif git_repo_info["remotes"]:
+                    metadata["git_remote_extraction_pending"] = True
+                    remote_prompt = (
+                        "Git remotes detected for the ingested external repo. "
+                        "Ask the user whether to extract and store them, then rerun ingest with "
+                        "`metadata.extract_remotes=true` to add them to the entity and source note."
+                    )
 
     # 1. Save Raw Source
     raw_file = RAW_DIR / "inbox" / f"{safe_name}.md"
@@ -1029,17 +1150,42 @@ def memoid_ingest(
     if metadata.get("todo_scan_completed"):
         metadata["extracted_todos"] = extracted_todos
 
+    generated_sections = dict(metadata.get("generated_sections", {}))
     if extracted_todos and _guess_page_type(target_page) == "entities":
         promoted_todos = _promote_todo_items(extracted_todos, limit=15)
-        metadata["generated_sections"] = {
-            "## Open TODOs": "\n".join(
+        generated_sections["## Open TODOs"] = "\n".join(
+            [
+                f"Auto-generated from code ingest on {timestamp}. Full extraction lives in the linked source note.",
+                "",
+                *(_render_todo_lines(promoted_todos) or ["- None."]),
+            ]
+        )
+    if git_repo_info and _guess_page_type(target_page) == "entities":
+        source_control_lines = [
+            f"Auto-generated from code ingest on {timestamp}.",
+            "",
+            f"- Git repository detected: yes",
+            f"- Repo root: `{git_repo_info['repo_root']}`",
+            f"- Active branch: `{git_repo_info['branch']}`",
+        ]
+        if metadata.get("git_remotes"):
+            source_control_lines.extend(
                 [
-                    f"Auto-generated from code ingest on {timestamp}. Full extraction lives in the linked source note.",
+                    f"- Remote count: {len(metadata['git_remotes'])}",
                     "",
-                    *(_render_todo_lines(promoted_todos) or ["- None."]),
+                    "### Remotes",
+                    *_render_git_remote_lines(metadata["git_remotes"]),
                 ]
             )
-        }
+        elif metadata.get("git_remote_extraction_pending"):
+            source_control_lines.append("- Remotes: detected but awaiting user approval for extraction")
+        elif git_repo_info["remote_count"]:
+            source_control_lines.append("- Remotes: detected but not extracted")
+        else:
+            source_control_lines.append("- Remotes: none configured")
+        generated_sections["## Source Control"] = "\n".join(source_control_lines)
+    if generated_sections:
+        metadata["generated_sections"] = generated_sections
 
     synthesized_summary = (summary or content[:500]).strip()
     existing_content = target_path.read_text(encoding="utf-8") if target_path.exists() else None
@@ -1092,6 +1238,7 @@ def memoid_ingest(
         f"Note: {note_rel}\n"
         f"Wiki: {page_rel}\n"
         f"Index Updated: {'yes' if index_changed else 'no'}\n"
+        f"{remote_prompt + chr(10) if remote_prompt else ''}"
         f"{lint_report}"
     )
 

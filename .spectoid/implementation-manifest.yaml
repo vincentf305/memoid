@@ -1,0 +1,16 @@
+project:
+  name: memoid
+  slug: memoid
+  type: implementation-repo
+
+spectoid:
+  repo: /home/prods/.spectoid
+  version: 0d02034
+
+choices:
+  primary_language: python
+  app_shape: backend-only
+  browser_ui: false
+  web_ui_direction: htmx
+
+overrides: []
