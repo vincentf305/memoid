@@ -6,7 +6,8 @@
 - [ESSENTIAL_STORY.md](./ESSENTIAL_STORY.md): bounded current-state brief
 
 ## Entities
-*(Add project-specific entity pages here)*
+
+- [memoid.md](./entities/memoid.md): project entity for the Memoid system and its active work
 
 ## Concepts
 *(Add project-specific concept pages here)*
