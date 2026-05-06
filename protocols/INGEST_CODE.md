@@ -26,6 +26,7 @@ At minimum, extract:
 - **Flows**: Trace high-value flows (e.g., authentication, request handling, data ingestion, build/deploy).
 - **Tech Stack**: Key technologies and dependencies relevant to understanding.
 - **Patterns**: Notable conventions, patterns, or risks.
+- **Code TODOs**: Structured TODO-style comments (`TODO`, `FIXME`, `HACK`, `XXX`) with exact code locations.
 
 ## Process
 
@@ -34,9 +35,10 @@ At minimum, extract:
 3. **Map Structure**: Use `rg --files`, `find`, or directory listings to map the top-level tree.
 4. **Identify Boundaries**: Find apps, services, packages, modules, APIs, and databases.
 5. **Trace Flows**: Follow the highest-value flows end-to-end.
-6. **Create Evidence**: Create one source note under `memory/evidence/source-notes/`.
-7. **Update Wiki**: Create or update relevant canonical wiki pages under `memory/wiki/`.
-8. **Update Log**: Update `memory/wiki/INDEX.md` and append to `memory/wiki/LOG.md`.
+6. **Extract TODOs**: Scan the codebase for TODO-style comments and capture file path, line number, raw text, and nearby symbol or context when available.
+7. **Create Evidence**: Create one source note under `memory/evidence/source-notes/`, including the extracted TODO set or a statement that none were found.
+8. **Update Wiki**: Create or update relevant canonical wiki pages under `memory/wiki/`. If the ingest is for a project entity, attach promoted high-signal TODOs to that entity page and keep the full set in evidence.
+9. **Update Log**: Update `memory/wiki/INDEX.md` and append to `memory/wiki/LOG.md`.
 
 ## Evidence Record (Source Note)
 
@@ -45,6 +47,7 @@ Include:
 - Analysis date and optional revision markers (git SHA, version).
 - Summary of architecture and important directories.
 - Key flows inspected and any caveats.
+- Extracted TODO-style comments with precise locations, or an explicit `none found`.
 - List of affected wiki pages.
 
 ## Heuristics
@@ -52,6 +55,7 @@ Include:
 - **Synthesis > Restatement**: Prefer durable synthesis over file-by-file restatement.
 - **Responsibility-based naming**: Summarize modules by responsibility, not just filename.
 - **No Large Excerpts**: Do not copy large source code blocks into the wiki.
+- **Evidence First**: Store the full TODO extraction in evidence; only promote high-signal TODOs into the project entity page.
 - **Trace Uncertainty**: Record explicitly when a flow was inferred rather than confirmed.
 
 ## Rules

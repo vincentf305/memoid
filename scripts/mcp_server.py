@@ -2,6 +2,7 @@
 import os
 import datetime
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Set
 from mcp.server.fastmcp import FastMCP
@@ -16,6 +17,28 @@ RAW_DIR = MEMORY_DIR / "raw"
 WIKI_DIR = MEMORY_DIR / "wiki"
 EVIDENCE_DIR = MEMORY_DIR / "evidence"
 INDEX_PATH = WIKI_DIR / "INDEX.md"
+TODO_MARKERS = ("TODO", "FIXME", "HACK", "XXX")
+TODO_COMMENT_PATTERN = re.compile(
+    r"(?P<prefix>#|//|/\*+|\*|<!--|;|--)\s*(?P<marker>TODO|FIXME|HACK|XXX)\b[:\-\s]*(?P<text>.*)",
+    flags=re.IGNORECASE,
+)
+IGNORED_CODE_DIRS = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    ".mypy_cache",
+    ".pytest_cache",
+}
+LOW_SIGNAL_TODO_SEGMENTS = {"test", "tests", "spec", "specs", "__tests__", "fixtures", "docs", "examples"}
+MAX_TODO_FILE_BYTES = 1_000_000
+INTERNAL_METADATA_KEYS = {"extract_todos", "extracted_todos", "generated_sections", "todo_scan_completed"}
 
 
 def _tokenize(text: str) -> List[str]:
@@ -250,6 +273,143 @@ def _render_file_dump(title: str, files: List[Path]) -> str:
     return "\n".join(parts).rstrip()
 
 
+def _is_probably_text_file(path: Path) -> bool:
+    try:
+        with open(path, "rb") as f:
+            sample = f.read(8192)
+    except OSError:
+        return False
+    return b"\x00" not in sample
+
+
+def _infer_code_context(lines: List[str], line_index: int) -> str:
+    definition_patterns = [
+        re.compile(r"^\s*(?:async\s+def|def|class)\s+([A-Za-z_][A-Za-z0-9_]*)"),
+        re.compile(r"^\s*(?:func|function)\s+([A-Za-z_][A-Za-z0-9_]*)"),
+        re.compile(r"^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*="),
+        re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_:<>]*)\s*\([^)]*\)\s*\{?\s*$"),
+    ]
+    for offset in range(line_index - 1, max(-1, line_index - 8), -1):
+        candidate = lines[offset].strip()
+        if not candidate:
+            continue
+        for pattern in definition_patterns:
+            match = pattern.match(candidate)
+            if match:
+                return match.group(1)
+        if not candidate.startswith(("#", "//", "/*", "*", "<!--", ";", "--")):
+            return candidate[:120]
+    return ""
+
+
+def _extract_todo_items_from_text(content: str, file_path: Path, base_path: Path) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    lines = content.splitlines()
+    rel_path = file_path.relative_to(base_path).as_posix()
+    for index, line in enumerate(lines):
+        match = TODO_COMMENT_PATTERN.search(line)
+        if not match:
+            continue
+        marker = match.group("marker").upper()
+        text = match.group("text").strip() or "(no detail)"
+        context = _infer_code_context(lines, index)
+        items.append(
+            {
+                "marker": marker,
+                "text": text,
+                "path": rel_path,
+                "line": index + 1,
+                "context": context,
+                "low_signal": any(segment in LOW_SIGNAL_TODO_SEGMENTS for segment in Path(rel_path).parts),
+            }
+        )
+    return items
+
+
+def _extract_code_todos(codebase_path: Path) -> List[Dict[str, Any]]:
+    if not codebase_path.exists() or not codebase_path.is_dir():
+        return []
+
+    items: List[Dict[str, Any]] = []
+    for path in sorted(codebase_path.rglob("*")):
+        if not path.is_file():
+            continue
+        if any(part in IGNORED_CODE_DIRS for part in path.relative_to(codebase_path).parts):
+            continue
+        try:
+            if path.stat().st_size > MAX_TODO_FILE_BYTES or not _is_probably_text_file(path):
+                continue
+        except OSError:
+            continue
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            try:
+                content = path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+        except OSError:
+            continue
+        items.extend(_extract_todo_items_from_text(content, path, codebase_path))
+    return items
+
+
+def _summarize_todo_markers(items: List[Dict[str, Any]]) -> str:
+    if not items:
+        return "none"
+    counts = Counter(item["marker"] for item in items)
+    return ", ".join(f"{marker}: {counts[marker]}" for marker in TODO_MARKERS if counts.get(marker))
+
+
+def _render_todo_lines(items: List[Dict[str, Any]], limit: Optional[int] = None) -> List[str]:
+    lines: List[str] = []
+    selected = items if limit is None else items[:limit]
+    for item in selected:
+        context = f" (`{item['context']}`)" if item.get("context") else ""
+        lines.append(
+            f"- `{item['marker']}` in `{item['path']}:{item['line']}`{context}: {item['text']}"
+        )
+    return lines
+
+
+def _promote_todo_items(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    promoted = [item for item in items if not item.get("low_signal")]
+    if len(promoted) < limit:
+        fallback = [item for item in items if item not in promoted]
+        promoted.extend(fallback[: limit - len(promoted)])
+    return promoted[:limit]
+
+
+def _apply_generated_sections(
+    content: str,
+    generated_sections: Dict[str, str],
+    preferred_order: Optional[List[str]] = None,
+) -> str:
+    if not generated_sections:
+        return content
+    title, sections, order = _parse_markdown_sections(content)
+    if not title:
+        return content
+
+    preferred_order = preferred_order or []
+    for heading in preferred_order:
+        if heading in generated_sections and heading not in order:
+            if "## Sources" in order:
+                order.insert(order.index("## Sources"), heading)
+            else:
+                order.append(heading)
+
+    for heading, body in generated_sections.items():
+        sections[heading] = body.strip()
+        if heading not in order:
+            if "## Sources" in order:
+                order.insert(order.index("## Sources"), heading)
+            else:
+                order.append(heading)
+
+    return _render_markdown_page(title, sections, order)
+
+
 def _path_is_indexed(page_path: Path) -> bool:
     if not INDEX_PATH.exists():
         return False
@@ -453,6 +613,8 @@ def _format_metadata(metadata: Optional[Dict[str, Any]]) -> str:
         return ""
     lines = []
     for key, value in metadata.items():
+        if key in INTERNAL_METADATA_KEYS:
+            continue
         lines.append(f"- **{key}**: {value}")
     return "\n".join(lines)
 
@@ -637,10 +799,18 @@ def _build_wiki_page(
     existing_content: Optional[str] = None,
 ) -> str:
     page_type = _guess_page_type(page_path)
+    generated_sections = {}
+    if metadata:
+        generated_sections = {
+            key: str(value).strip()
+            for key, value in metadata.get("generated_sections", {}).items()
+            if str(value).strip()
+        }
     if existing_content is not None:
         content = existing_content.rstrip()
         if summary and not re.search(r"^## Summary\s*$", content, flags=re.MULTILINE):
             content = f"# {source_name}\n\n## Summary\n{summary}\n\n{content}".strip()
+        content = _apply_generated_sections(content, generated_sections, preferred_order=["## Open TODOs"])
         return _append_source_link(content, target_path.parent, source_note_path)
 
     sections = _section_template(page_type)
@@ -657,7 +827,8 @@ def _build_wiki_page(
             lines.append("_TBD_")
         lines.append("")
 
-    return "\n".join(lines).rstrip() + "\n"
+    content = "\n".join(lines).rstrip() + "\n"
+    return _apply_generated_sections(content, generated_sections, preferred_order=["## Open TODOs"])
 
 
 def _ensure_index_entry(page_path: str, title: str, summary: str) -> bool:
@@ -722,14 +893,30 @@ def _build_source_note(
             "",
             "## Summary",
             summary,
-            "",
+        "",
             "## Affected Pages",
             affected,
-            "",
+        "",
             "## Sources",
             f"- [raw source]({_relative_link(source_note_path.parent, raw_file)})",
         ]
     )
+    todo_scan_completed = bool(metadata.get("todo_scan_completed")) if metadata else False
+    extracted_todos = metadata.get("extracted_todos") if metadata else None
+    if todo_scan_completed:
+        extracted_todos = extracted_todos or []
+        total_count = len(extracted_todos)
+        note_lines = _render_todo_lines(extracted_todos, limit=50) or ["- None found."]
+        if extracted_todos and total_count > len(note_lines):
+            note_lines.append(f"- ... {total_count - len(note_lines)} more TODO item(s) omitted from this note")
+        lines[lines.index("## Sources"):lines.index("## Sources")] = [
+            "",
+            "## Extracted TODOs",
+            f"- Total TODO-style comments found: {total_count}",
+            f"- Marker breakdown: {_summarize_todo_markers(extracted_todos)}",
+            *note_lines,
+            "",
+        ]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -807,6 +994,21 @@ def memoid_ingest(
     """
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     safe_name = _slugify(source_name)
+    metadata = dict(metadata or {})
+
+    codebase_path_value = str(metadata.get("codebase_path", "")).strip()
+    extracted_todos: List[Dict[str, Any]] = []
+    if codebase_path_value and str(metadata.get("extract_todos", "true")).lower() != "false":
+        codebase_path = Path(codebase_path_value).expanduser()
+        if codebase_path.exists() and codebase_path.is_dir():
+            extracted_todos = _extract_code_todos(codebase_path.resolve())
+            metadata["codebase_path"] = codebase_path.resolve().as_posix()
+            metadata["todo_count"] = len(extracted_todos)
+            metadata["todo_markers"] = _summarize_todo_markers(extracted_todos)
+            metadata["todo_scan_completed"] = True
+        else:
+            metadata["codebase_path"] = codebase_path.as_posix()
+            metadata["todo_extraction_warning"] = "codebase_path was not a readable directory"
 
     # 1. Save Raw Source
     raw_file = RAW_DIR / "inbox" / f"{safe_name}.md"
@@ -823,6 +1025,21 @@ def memoid_ingest(
 
     source_note_path = EVIDENCE_DIR / "source-notes" / f"{safe_name}.md"
     source_note_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if metadata.get("todo_scan_completed"):
+        metadata["extracted_todos"] = extracted_todos
+
+    if extracted_todos and _guess_page_type(target_page) == "entities":
+        promoted_todos = _promote_todo_items(extracted_todos, limit=15)
+        metadata["generated_sections"] = {
+            "## Open TODOs": "\n".join(
+                [
+                    f"Auto-generated from code ingest on {timestamp}. Full extraction lives in the linked source note.",
+                    "",
+                    *(_render_todo_lines(promoted_todos) or ["- None."]),
+                ]
+            )
+        }
 
     synthesized_summary = (summary or content[:500]).strip()
     existing_content = target_path.read_text(encoding="utf-8") if target_path.exists() else None

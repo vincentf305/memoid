@@ -493,6 +493,10 @@ Memoid has two distinct modes:
 
 > **AI Action:** Calls `memoid_ingest` to save the source, create a source note, update a wiki page, refresh the index/log, and run scoped lint.
 
+**Prompt:** "Ingest this codebase and capture TODO comments on the project page."
+
+> **AI Action:** Calls `memoid_ingest` with a `codebase_path`, extracts `TODO`/`FIXME`/`HACK`/`XXX` comments into the source note, and promotes high-signal items onto the project entity page.
+
 **Prompt:** "Run a Memoid audit on the pages we touched."
 
 > **AI Action:** Calls `memoid_audit` to create an explicit audit note under `memory/evidence/audits/`.
@@ -503,7 +507,7 @@ Memoid has two distinct modes:
 |---|---|
 | **`memoid_wake_up`** | Bounded startup context for outside-repo use |
 | **`memoid_recall`** | Retrieval-ladder search with bounded excerpts and trust signals |
-| **`memoid_ingest`** | Raw → evidence → wiki → index → log pipeline with scoped lint |
+| **`memoid_ingest`** | Raw → evidence → wiki → index → log pipeline with scoped lint; can also scan a `codebase_path` for TODO-style comments and attach them to a project entity |
 | **`memoid_edit_wiki`** | Structured canonical-page updates with source/index preservation |
 | **`memoid_log`** | Session filing into `memory/evidence/sessions/` plus `LOG.md` |
 | **`memoid_audit`** | Explicit outside-repo maintenance that writes to `memory/evidence/audits/` |
