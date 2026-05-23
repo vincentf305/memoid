@@ -59,7 +59,7 @@ Memoid is 100% transparent. No databases, just interlinked Markdown files.
 ```
 memoid/
 ├── AGENTS.md               # Master orchestrator instructions
-├── CLAUDE.md / GEMINI.md / CURSOR.md / copilot-instructions.md  # Agent-specific guidance
+├── CLAUDE.md / GEMINI.md / AGY.md / CURSOR.md / copilot-instructions.md  # Agent-specific guidance
 ├── SPEC.md                 # Architecture design rationale
 ├── memory/
 │   ├── raw/                # Immutable source material (articles, transcripts, assets, inbox)
@@ -179,6 +179,7 @@ This file belongs under `memory/wiki/` because that is the durable, user-specifi
 After installation, the main local entrypoint is the `memoid` CLI. Running `memoid <agent>` opens your agent directly in the Memoid repo root.
 
 ```bash
+memoid agy
 memoid claude
 memoid gemini
 memoid codex
@@ -525,7 +526,7 @@ Memoid has two distinct modes:
 | `memoid init`    | Prepares the directory structure. Safe to run multiple times; will not delete existing data.                         |
 | `memoid update`  | Updates the engine and protocols. **Never** overwrites your knowledge base (`memory/` folder).                          |
 | `memoid mcp`     | Launches the MCP server for global connectivity.                                                                        |
-| `memoid <agent>` | Launches an agent (e.g., `gemini`, `claude`, `codex`) in the Memoid repo root. |
+| `memoid <agent>` | Launches an agent (e.g., `agy`, `gemini`, `claude`, `codex`) in the Memoid repo root. |
 | `memoid version` | Displays the current version.                                                                                           |
 
 ---
@@ -565,7 +566,7 @@ Edit `opencode.json`:
 }
 ```
 
-#### **Gemini CLI**
+#### **Antigravity CLI (agy) / Gemini CLI**
 Edit `~/.gemini/settings.json`:
 
 ```json

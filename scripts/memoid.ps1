@@ -31,7 +31,7 @@ function Show-Help {
     Write-Host "       memoid version" -ForegroundColor Cyan
     Write-Host "       memoid init" -ForegroundColor Cyan
     Write-Host "       memoid update" -ForegroundColor Cyan
-    Write-Host "Example: memoid gemini" -ForegroundColor Gray
+    Write-Host "Example: memoid agy" -ForegroundColor Gray
     exit 1
 }
 

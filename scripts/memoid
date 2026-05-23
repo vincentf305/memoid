@@ -24,7 +24,7 @@ show_help() {
   printf "       memoid version\n"
   printf "       memoid init\n"
   printf "       memoid update\n"
-  printf "Example: memoid gemini\n"
+  printf "Example: memoid agy\n"
   exit 1
 }
 
